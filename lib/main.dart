@@ -13,6 +13,10 @@ import 'devtools/dev_tools_page.dart';
 import 'security/security_page.dart';
 import 'process/process_page.dart';
 import 'settings/settings_page.dart';
+import 'fileops/large_file_finder.dart';
+import 'fileops/bulk_renamer.dart';
+import 'automation/auto_shutdown.dart';
+import 'automation/game_mode.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,15 +62,13 @@ class SwissToolApp extends StatelessWidget {
           displayColor: Colors.white,
         ),
       ),
-      // DİKKAT: Artık direkt MainLayout'u açmıyoruz!
-      // Önce "AppBootstrapper" adlı bekleme odasını açıyoruz.
+      // Bootstrapper ile güvenli açılış
       home: const AppBootstrapper(),
     );
   }
 }
 
 // --- BEKLEME ODASI (BOOTSTRAPPER) ---
-// Bu widget pencerenin hazır olmasını bekler, sonra ana ekranı yükler.
 class AppBootstrapper extends StatefulWidget {
   const AppBootstrapper({super.key});
 
@@ -80,8 +82,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
   @override
   void initState() {
     super.initState();
-    // 500 milisaniye (yarım saniye) bekle.
-    // Bu süre Windows'un pencereyi oturtması için yeterli.
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         setState(() {
@@ -93,7 +93,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // Eğer hazır değilse Siyah Ekran + Loading göster
     if (!isReady) {
       return const Scaffold(
         backgroundColor: Color(0xFF0F0F0F),
@@ -111,8 +110,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
         ),
       );
     }
-
-    // Hazırsa Asıl Uygulamayı (MainLayout) göster
     return const MainLayout();
   }
 }
@@ -132,11 +129,16 @@ class _MainLayoutState extends State<MainLayout>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
+  // --- SAYFA LİSTESİ (DÜZELTİLDİ: ARTIK 7 SAYFA VAR) ---
   final List<Widget> _pages = [
     const DashboardHome(),
     const NetworkPage(),
     const SystemDoctorPage(),
     const ProcessPage(),
+    const LargeFileFinderPage(),
+    const BulkRenamerPage(),
+    const AutoShutdownPage(),
+    const GameModePage(), // <-- YENİ EKLENDİ (Index: 7)
   ];
 
   @override
@@ -149,8 +151,7 @@ class _MainLayoutState extends State<MainLayout>
   void _initAnimations() {
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(
-          milliseconds: 800), // Biraz daha yavaş ve havalı açılış
+      duration: const Duration(milliseconds: 800),
       reverseDuration: const Duration(milliseconds: 400),
     );
 
@@ -180,6 +181,11 @@ class _MainLayoutState extends State<MainLayout>
 
   @override
   Widget build(BuildContext context) {
+    var size = MediaQuery.of(context).size;
+    if (size.width <= 10 || size.height <= 10) {
+      return const Scaffold(backgroundColor: Color(0xFF0F0F0F));
+    }
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: FadeTransition(
@@ -221,7 +227,7 @@ class _MainLayoutState extends State<MainLayout>
                           child: Column(
                             children: [
                               const SizedBox(height: 20),
-                              Icon(FontAwesomeIcons.toolbox,
+                              const Icon(FontAwesomeIcons.toolbox,
                                   size: 40, color: Colors.cyanAccent),
                               const SizedBox(height: 10),
                               Text("SWISSTOOL",
@@ -233,64 +239,106 @@ class _MainLayoutState extends State<MainLayout>
                                       color: Colors.cyanAccent,
                                       letterSpacing: 2)),
                               const SizedBox(height: 30),
-                              _buildMenuItem(
-                                  0,
-                                  "Dashboard",
-                                  FontAwesomeIcons.chartPie,
-                                  Colors.purpleAccent),
-                              _buildDivider(),
-                              _buildMenuItem(
-                                  1,
-                                  "Network Manager",
-                                  FontAwesomeIcons.networkWired,
-                                  Colors.blueAccent),
-                              _buildMenuItem(
-                                  2,
-                                  "System Doctor",
-                                  FontAwesomeIcons.heartPulse,
-                                  Colors.redAccent),
-                              _buildMenuItem(3, "Process Killer",
-                                  FontAwesomeIcons.skull, Colors.pinkAccent),
-                              _buildDivider(),
-                              _buildSpecialButton(
-                                  "Hardware Info",
-                                  FontAwesomeIcons.microchip,
-                                  Colors.orangeAccent, () {
-                                showHardwareMenu(context);
-                              }),
-                              _buildSpecialButton(
-                                  "Dev Tools",
-                                  FontAwesomeIcons.code,
-                                  Colors.greenAccent, () {
-                                Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            const DevToolsPage()));
-                              }),
-                              _buildSpecialButton(
-                                  "Security Center",
-                                  FontAwesomeIcons.shieldHalved,
-                                  Colors.amber, () {
-                                Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            const SecurityPage()));
-                              }),
-                              _buildDivider(),
-                              _buildSpecialButton("Settings & About",
-                                  Icons.settings, Colors.white, () {
-                                Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            const SettingsPage()));
-                              }),
-                              const Spacer(),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Column(
+                                    children: [
+                                      _buildMenuItem(
+                                          0,
+                                          "Dashboard",
+                                          FontAwesomeIcons.chartPie,
+                                          Colors.purpleAccent),
+                                      _buildDivider(),
+                                      _buildMenuItem(
+                                          1,
+                                          "Network Manager",
+                                          FontAwesomeIcons.networkWired,
+                                          Colors.blueAccent),
+                                      _buildMenuItem(
+                                          2,
+                                          "System Doctor",
+                                          FontAwesomeIcons.heartPulse,
+                                          Colors.redAccent),
+                                      _buildMenuItem(
+                                          3,
+                                          "Process Killer",
+                                          FontAwesomeIcons.skull,
+                                          Colors.pinkAccent),
+
+                                      // --- FİLE OPS (TEKRAR KALDIRILDI) ---
+                                      _buildMenuItem(
+                                          4,
+                                          "Large File Finder",
+                                          FontAwesomeIcons.magnifyingGlassChart,
+                                          Colors.tealAccent),
+                                      _buildMenuItem(
+                                          5,
+                                          "Bulk Renamer",
+                                          FontAwesomeIcons.tags,
+                                          Colors.indigoAccent),
+
+                                      // --- AUTOMATION ---
+                                      _buildDivider(),
+                                      _buildMenuItem(
+                                          6,
+                                          "Auto Shutdown",
+                                          FontAwesomeIcons.powerOff,
+                                          Colors.redAccent),
+                                      _buildMenuItem(
+                                          7,
+                                          "Game Booster",
+                                          FontAwesomeIcons.gamepad,
+                                          Colors.greenAccent),
+
+                                      _buildDivider(),
+
+                                      _buildSpecialButton(
+                                          "Hardware Info",
+                                          FontAwesomeIcons.microchip,
+                                          Colors.orangeAccent, () {
+                                        showHardwareMenu(context);
+                                      }),
+
+                                      _buildSpecialButton(
+                                          "Dev Tools",
+                                          FontAwesomeIcons.code,
+                                          Colors.greenAccent, () {
+                                        Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const DevToolsPage()));
+                                      }),
+
+                                      _buildSpecialButton(
+                                          "Security Center",
+                                          FontAwesomeIcons.shieldHalved,
+                                          Colors.amber, () {
+                                        Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const SecurityPage()));
+                                      }),
+
+                                      _buildDivider(),
+
+                                      _buildSpecialButton("Settings & About",
+                                          Icons.settings, Colors.white, () {
+                                        Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const SettingsPage()));
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ),
                               const Padding(
                                 padding: EdgeInsets.all(20.0),
-                                child: Text("v2.3.5 Final",
+                                child: Text("v2.4.1 Fix",
                                     style: TextStyle(
                                         color: Colors.grey, fontSize: 10)),
                               ),
@@ -405,7 +453,6 @@ class DashboardHome extends StatefulWidget {
 }
 
 class _DashboardHomeState extends State<DashboardHome> {
-  // GÖRÜNÜR DEĞİŞKENLER
   String cpuText = "%0";
   String ramText = "-- / -- GB";
   String diskText = "-- / -- GB";
@@ -414,7 +461,6 @@ class _DashboardHomeState extends State<DashboardHome> {
   String netStatus = "--";
   Color netColor = Colors.grey;
 
-  // HESAPLANMIŞ DEĞERLER
   double cpuProgress = 0.0;
   double ramProgress = 0.0;
   double diskProgress = 0.0;
@@ -438,7 +484,6 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   Future<void> _getSystemStats() async {
     try {
-      // Verileri Çek
       String cpuRaw = await _runPS(
           r"Get-WmiObject Win32_Processor | Select-Object -ExpandProperty LoadPercentage");
       String ramRaw = await _runPS(

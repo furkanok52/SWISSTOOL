@@ -23,6 +23,7 @@ dependencies:
   record_windows: ^1.0.1 # Windows için özel sürücü (Bunu da ekleyelim garanti olsun)
   crypto: ^3.0.7
   url_launcher: ^6.3.2
+  file_picker: ^10.3.10
 
 # İŞTE SİHİRLİ DOKUNUŞ BURASI:
 dependency_overrides:
