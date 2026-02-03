@@ -21,6 +21,8 @@ dependencies:
   audioplayers: ^5.2.1
   record: ^5.1.0 # En güncel sürüm
   record_windows: ^1.0.1 # Windows için özel sürücü (Bunu da ekleyelim garanti olsun)
+  crypto: ^3.0.7
+  url_launcher: ^6.3.2
 
 # İŞTE SİHİRLİ DOKUNUŞ BURASI:
 dependency_overrides:
