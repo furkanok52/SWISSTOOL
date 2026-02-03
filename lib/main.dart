@@ -5,20 +5,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 // --- SAYFA IMPORTLARI ---
-import 'hardware/hardware_menu.dart';
 import 'network_page.dart';
 import 'doctor/system_doctor_page.dart';
+import 'hardware/hardware_menu.dart';
 import 'devtools/dev_tools_page.dart';
+// import 'security/security_page.dart'; // Güvenlik sayfasını oluşturunca açarsın
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(950, 650),
+    size: Size(1100, 750),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
-    title: 'SwissTool',
+    titleBarStyle: TitleBarStyle.hidden,
+    title: 'SwissTool Pro',
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
@@ -35,10 +37,10 @@ class SwissToolApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
         cardColor: const Color(0xFF1E1E1E),
         primaryColor: Colors.cyanAccent,
-        // Fontları modern yapalım
+        // DÜZELTME BURADA: jetBrainsMonoTextTheme (B harfi büyük)
         textTheme:
             GoogleFonts.jetBrainsMonoTextTheme(Theme.of(context).textTheme)
                 .apply(
@@ -46,228 +48,253 @@ class SwissToolApp extends StatelessWidget {
           displayColor: Colors.white,
         ),
       ),
-      home: const DashboardPage(),
+      home: const MainLayout(),
     );
   }
 }
 
-class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+class MainLayout extends StatefulWidget {
+  const MainLayout({super.key});
+
+  @override
+  State<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends State<MainLayout> {
+  int _selectedIndex = 0;
+
+  // SAYFA LİSTESİ
+  final List<Widget> _pages = [
+    const DashboardHome(), // 0: Ana Özet
+    const NetworkPage(), // 1: Network
+    const SystemDoctorPage(), // 2: Doctor
+  ];
 
   @override
   Widget build(BuildContext context) {
-    // İşletim Sistemini Bul
-    String osName = Platform.operatingSystem.toUpperCase();
-    IconData osIcon =
-        Platform.isWindows ? FontAwesomeIcons.windows : FontAwesomeIcons.linux;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(FontAwesomeIcons.toolbox, color: Colors.cyanAccent),
-            const SizedBox(width: 10),
-            // Başlık Fontu Efsane Olsun
-            Text("SWISSTOOL v1.0",
-                style: GoogleFonts.audiowide(
-                    letterSpacing: 2, color: Colors.white)),
-          ],
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // --- 1. SYSTEM DETECTED KARTI (Windows Logolu Olan) ---
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.cyan.shade900.withOpacity(0.6),
-                    Colors.blue.shade900.withOpacity(0.6)
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.cyan.withOpacity(0.3)),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.cyan.withOpacity(0.1),
-                      blurRadius: 20,
-                      spreadRadius: 5),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Icon(osIcon, color: Colors.cyanAccent, size: 30),
+      body: Column(
+        children: [
+          // 1. PENCERE ÇUBUĞU
+          _buildTitleBar(),
+
+          // 2. ANA GÖVDE
+          Expanded(
+            child: Row(
+              children: [
+                // --- SOL MENÜ (SIDEBAR) ---
+                Container(
+                  width: 240,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161616),
+                    border: Border(
+                        right:
+                            BorderSide(color: Colors.white.withOpacity(0.05))),
                   ),
-                  const SizedBox(width: 20),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Column(
                     children: [
-                      Text("SYSTEM DETECTED: $osName",
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 16)),
-                      Text("Ready for operations...",
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[400])),
+                      const SizedBox(height: 20),
+                      Icon(FontAwesomeIcons.toolbox,
+                          size: 40, color: Colors.cyanAccent),
+                      const SizedBox(height: 10),
+                      Text("SWISSTOOL",
+                          style: GoogleFonts.audiowide(
+                              fontSize: 20, color: Colors.white)),
+                      Text("ULTIMATE EDITION",
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.cyanAccent,
+                              letterSpacing: 2)),
+                      const SizedBox(height: 30),
+
+                      // MENÜLER
+                      _buildMenuItem(0, "Dashboard", FontAwesomeIcons.chartPie,
+                          Colors.purpleAccent),
+                      _buildDivider(),
+                      _buildMenuItem(1, "Network Manager",
+                          FontAwesomeIcons.networkWired, Colors.blueAccent),
+                      _buildMenuItem(2, "System Doctor",
+                          FontAwesomeIcons.heartPulse, Colors.redAccent),
+
+                      // Hardware (Özel)
+                      _buildSpecialButton("Hardware Info",
+                          FontAwesomeIcons.microchip, Colors.orangeAccent, () {
+                        showHardwareMenu(context);
+                      }),
+
+                      _buildDivider(),
+
+                      // Dev Tools (Özel)
+                      _buildSpecialButton("Dev Tools", FontAwesomeIcons.code,
+                          Colors.greenAccent, () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const DevToolsPage()));
+                      }),
+
+                      // Security (Hazırlık)
+                      _buildSpecialButton("Security Center",
+                          FontAwesomeIcons.shieldHalved, Colors.amber, () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text("Güvenlik Modülü Yükleniyor...")));
+                      }),
+
+                      const Spacer(),
+                      const Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Text("v2.0.1 Stable",
+                            style: TextStyle(color: Colors.grey, fontSize: 10)),
+                      ),
                     ],
-                  )
-                ],
-              ),
+                  ),
+                ),
+
+                // --- SAĞ İÇERİK ---
+                Expanded(
+                  child: Container(
+                    color: const Color(0xFF0F0F0F),
+                    child: _pages.length > _selectedIndex
+                        ? _pages[_selectedIndex]
+                        : const Center(child: Text("Sayfa Yapım Aşamasında")),
+                  ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 30),
-
-            // --- 2. ARAÇLAR GRID (Alt Taraf) ---
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                childAspectRatio: 1.5,
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 20,
-                children: [
-                  // 1. NETWORK MANAGER
-                  _buildToolCard(
-                    context,
-                    title: "Network Manager",
-                    desc: "Speedtest, IP Info, Ping",
-                    icon: FontAwesomeIcons.networkWired,
-                    color: Colors.blueAccent,
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const NetworkPage()));
-                    },
-                  ),
-
-                  // 2. SYSTEM DOCTOR
-                  _buildToolCard(
-                    context,
-                    title: "System Doctor",
-                    desc: "Clean Temp, DNS Flush",
-                    icon: FontAwesomeIcons.heartPulse,
-                    color: Colors.redAccent,
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const SystemDoctorPage()));
-                    },
-                  ),
-
-                  // 3. HARDWARE TEST (MENÜYÜ AÇAR)
-                  _buildToolCard(
-                    context,
-                    title: "Hardware Test",
-                    desc: "Monitor, Keyboard, CPU-Z",
-                    icon: FontAwesomeIcons.microchip,
-                    color: Colors.orangeAccent,
-                    onTap: () {
-                      showHardwareMenu(context);
-                    },
-                  ),
-
-                  // 4. DEV TOOLS (ARTIK AKTİF!)
-                  _buildToolCard(
-                    context,
-                    title: "Dev Tools",
-                    desc: "JSON, Base64, URL Tools", // Açıklamayı güncelle
-                    icon: FontAwesomeIcons.code,
-                    color: Colors.greenAccent,
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const DevToolsPage()));
-                    },
-                  ),
-                ],
-              ),
-            ),
+  Widget _buildTitleBar() {
+    return GestureDetector(
+      onPanStart: (details) => windowManager.startDragging(),
+      child: Container(
+        height: 35,
+        color: const Color(0xFF161616),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            const SizedBox(width: 10),
+            Text("SwissTool // System Operations",
+                style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            const Spacer(),
+            _windowIcon(Icons.remove, () => windowManager.minimize()),
+            const SizedBox(width: 10),
+            _windowIcon(Icons.crop_square, () async {
+              if (await windowManager.isMaximized()) {
+                windowManager.unmaximize();
+              } else {
+                windowManager.maximize();
+              }
+            }),
+            const SizedBox(width: 10),
+            _windowIcon(Icons.close, () => windowManager.close(),
+                isClose: true),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildToolCard(BuildContext context,
-      {required String title,
-      required String desc,
-      required IconData icon,
-      required Color color,
-      required VoidCallback onTap}) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: Colors
-          .transparent, // Arka planı transparent yapıp container'a gradient verelim
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        splashColor: color.withOpacity(0.2),
-        child: Container(
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF252525),
-                  const Color(0xFF1E1E1E),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5)),
-              ]),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withOpacity(0.1),
-                  border: Border.all(color: color.withOpacity(0.3), width: 1),
-                ),
-                child: Icon(icon, size: 32, color: color),
-              ),
-              const SizedBox(height: 15),
-              Text(
-                title,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                desc,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-        ),
+  Widget _windowIcon(IconData icon, VoidCallback onTap,
+      {bool isClose = false}) {
+    return InkWell(
+      onTap: onTap,
+      child:
+          Icon(icon, size: 16, color: isClose ? Colors.redAccent : Colors.grey),
+    );
+  }
+
+  Widget _buildMenuItem(int index, String title, IconData icon, Color color) {
+    bool isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? color : Colors.grey, size: 20),
+      title: Text(title,
+          style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14)),
+      selected: isSelected,
+      tileColor: isSelected ? color.withOpacity(0.1) : null,
+      onTap: () => setState(() => _selectedIndex = index),
+    );
+  }
+
+  Widget _buildSpecialButton(
+      String title, IconData icon, Color color, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.grey, size: 20),
+      title:
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+      trailing: Icon(Icons.arrow_forward_ios,
+          size: 10, color: color.withOpacity(0.5)),
+      hoverColor: color.withOpacity(0.05),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildDivider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Divider(color: Colors.white.withOpacity(0.05), height: 1),
+    );
+  }
+}
+
+// --- DASHBOARD ---
+class DashboardHome extends StatelessWidget {
+  const DashboardHome({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(30.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("HOŞ GELDİN, KAPTAN.",
+              style: GoogleFonts.audiowide(fontSize: 32, color: Colors.white)),
+          Text("Tüm sistemler aktif ve hazır.",
+              style: TextStyle(color: Colors.grey[500])),
+          const SizedBox(height: 40),
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 3,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
+              children: [
+                _statCard("CPU Kullanımı", "%12", Colors.blueAccent),
+                _statCard("RAM Durumu", "8.4 GB", Colors.purpleAccent),
+                _statCard("Network", "Online", Colors.greenAccent),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(String title, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 30, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }
