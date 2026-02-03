@@ -1,0 +1,35 @@
+name: swiss_tool
+description: "A new Flutter project."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  window_manager: ^0.5.1
+  device_info_plus: ^10.0.0
+  network_info_plus: ^5.0.0
+  font_awesome_flutter: ^10.6.0
+  google_fonts: ^6.1.0
+  http: ^1.1.0
+  path_provider: ^2.1.1
+  audioplayers: ^5.2.1
+  record: ^5.1.0 # En güncel sürüm
+  record_windows: ^1.0.1 # Windows için özel sürücü (Bunu da ekleyelim garanti olsun)
+
+# İŞTE SİHİRLİ DOKUNUŞ BURASI:
+dependency_overrides:
+  record_linux: ^1.1.0 # Flutter'ı o bozuk 0.7.2 sürümünü değil, bunu kullanmaya zorluyoruz!
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
