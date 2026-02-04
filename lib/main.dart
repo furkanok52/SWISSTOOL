@@ -17,15 +17,15 @@ import 'fileops/large_file_finder.dart';
 import 'fileops/bulk_renamer.dart';
 import 'automation/auto_shutdown.dart';
 import 'automation/game_mode.dart';
+import 'floating_monitor.dart'; // Bu dosyanın hazır olduğundan emin ol!
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // PENCERE AYARLARI
   WindowOptions windowOptions = const WindowOptions(
     size: Size(1150, 750),
-    minimumSize: Size(900, 600),
+    minimumSize: Size(220, 70), // Mini mod için minimum boyutu iyice düşürdük
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
@@ -36,7 +36,6 @@ void main() async {
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.focus();
-    // Zorla Boyutlandır
     await windowManager.setSize(const Size(1150, 750));
     await windowManager.center();
   });
@@ -62,13 +61,11 @@ class SwissToolApp extends StatelessWidget {
           displayColor: Colors.white,
         ),
       ),
-      // Bootstrapper ile güvenli açılış
       home: const AppBootstrapper(),
     );
   }
 }
 
-// --- BEKLEME ODASI (BOOTSTRAPPER) ---
 class AppBootstrapper extends StatefulWidget {
   const AppBootstrapper({super.key});
 
@@ -83,11 +80,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {
-          isReady = true;
-        });
-      }
+      if (mounted) setState(() => isReady = true);
     });
   }
 
@@ -124,12 +117,12 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout>
     with WindowListener, SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  bool isFloating = false; // Floating mod kontrolü
 
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
-  // --- SAYFA LİSTESİ (DÜZELTİLDİ: ARTIK 7 SAYFA VAR) ---
   final List<Widget> _pages = [
     const DashboardHome(),
     const NetworkPage(),
@@ -138,7 +131,7 @@ class _MainLayoutState extends State<MainLayout>
     const LargeFileFinderPage(),
     const BulkRenamerPage(),
     const AutoShutdownPage(),
-    const GameModePage(), // <-- YENİ EKLENDİ (Index: 7)
+    const GameModePage(),
   ];
 
   @override
@@ -150,20 +143,31 @@ class _MainLayoutState extends State<MainLayout>
 
   void _initAnimations() {
     _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-      reverseDuration: const Duration(milliseconds: 400),
-    );
-
+        vsync: this, duration: const Duration(milliseconds: 800));
     _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutExpo),
-    );
-
+        CurvedAnimation(parent: _animController, curve: Curves.easeOutExpo));
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
+  }
+
+  // --- MOD DEĞİŞTİRİCİ FONKSİYON ---
+  void _toggleFloating() async {
+    if (!isFloating) {
+      // MİNİ MODA GEÇİŞ
+      await windowManager.setAlwaysOnTop(true);
+      await windowManager.setHasShadow(false);
+      await windowManager.setSize(const Size(220, 70));
+      await windowManager.setResizable(false);
+    } else {
+      // NORMAL MODA GEÇİŞ
+      await windowManager.setAlwaysOnTop(false);
+      await windowManager.setSize(const Size(1150, 750));
+      await windowManager.setResizable(true);
+      await windowManager.setHasShadow(true);
+      await windowManager.center();
+    }
+    setState(() => isFloating = !isFloating);
   }
 
   @override
@@ -175,15 +179,18 @@ class _MainLayoutState extends State<MainLayout>
 
   @override
   void onWindowClose() async {
-    await _animController.reverse();
     await windowManager.destroy();
   }
 
   @override
   Widget build(BuildContext context) {
     var size = MediaQuery.of(context).size;
-    if (size.width <= 10 || size.height <= 10) {
+    if (size.width <= 10 || size.height <= 10)
       return const Scaffold(backgroundColor: Color(0xFF0F0F0F));
+
+    // Eğer mini moddaysak sadece takip kutusunu göster
+    if (isFloating) {
+      return FloatingMonitor(onExpand: _toggleFloating);
     }
 
     return ScaleTransition(
@@ -215,7 +222,6 @@ class _MainLayoutState extends State<MainLayout>
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // --- SOL MENÜ ---
                         Container(
                           width: 240,
                           decoration: BoxDecoration(
@@ -265,8 +271,6 @@ class _MainLayoutState extends State<MainLayout>
                                           "Process Killer",
                                           FontAwesomeIcons.skull,
                                           Colors.pinkAccent),
-
-                                      // --- FİLE OPS (TEKRAR KALDIRILDI) ---
                                       _buildMenuItem(
                                           4,
                                           "Large File Finder",
@@ -277,8 +281,6 @@ class _MainLayoutState extends State<MainLayout>
                                           "Bulk Renamer",
                                           FontAwesomeIcons.tags,
                                           Colors.indigoAccent),
-
-                                      // --- AUTOMATION ---
                                       _buildDivider(),
                                       _buildMenuItem(
                                           6,
@@ -290,16 +292,18 @@ class _MainLayoutState extends State<MainLayout>
                                           "Game Booster",
                                           FontAwesomeIcons.gamepad,
                                           Colors.greenAccent),
-
                                       _buildDivider(),
-
+                                      // MINI MODE BUTONU
+                                      _buildSpecialButton(
+                                          "Mini Mode",
+                                          Icons.tab_unselected,
+                                          Colors.cyanAccent,
+                                          _toggleFloating),
                                       _buildSpecialButton(
                                           "Hardware Info",
                                           FontAwesomeIcons.microchip,
-                                          Colors.orangeAccent, () {
-                                        showHardwareMenu(context);
-                                      }),
-
+                                          Colors.orangeAccent,
+                                          () => showHardwareMenu(context)),
                                       _buildSpecialButton(
                                           "Dev Tools",
                                           FontAwesomeIcons.code,
@@ -310,7 +314,6 @@ class _MainLayoutState extends State<MainLayout>
                                                 builder: (context) =>
                                                     const DevToolsPage()));
                                       }),
-
                                       _buildSpecialButton(
                                           "Security Center",
                                           FontAwesomeIcons.shieldHalved,
@@ -321,9 +324,7 @@ class _MainLayoutState extends State<MainLayout>
                                                 builder: (context) =>
                                                     const SecurityPage()));
                                       }),
-
                                       _buildDivider(),
-
                                       _buildSpecialButton("Settings & About",
                                           Icons.settings, Colors.white, () {
                                         Navigator.push(
@@ -338,15 +339,13 @@ class _MainLayoutState extends State<MainLayout>
                               ),
                               const Padding(
                                 padding: EdgeInsets.all(20.0),
-                                child: Text("v2.4.1 Fix",
+                                child: Text("v2.5.0 Phantom",
                                     style: TextStyle(
                                         color: Colors.grey, fontSize: 10)),
                               ),
                             ],
                           ),
                         ),
-
-                        // --- SAĞ İÇERİK ---
                         Expanded(
                           child: Container(
                             color: const Color(0xFF0F0F0F),
@@ -384,11 +383,10 @@ class _MainLayoutState extends State<MainLayout>
             _windowIcon(Icons.remove, () => windowManager.minimize()),
             const SizedBox(width: 10),
             _windowIcon(Icons.crop_square, () async {
-              if (await windowManager.isMaximized()) {
+              if (await windowManager.isMaximized())
                 windowManager.unmaximize();
-              } else {
+              else
                 windowManager.maximize();
-              }
             }),
             const SizedBox(width: 10),
             _windowIcon(Icons.close, () => windowManager.close(),
@@ -402,10 +400,9 @@ class _MainLayoutState extends State<MainLayout>
   Widget _windowIcon(IconData icon, VoidCallback onTap,
       {bool isClose = false}) {
     return InkWell(
-      onTap: onTap,
-      child:
-          Icon(icon, size: 16, color: isClose ? Colors.redAccent : Colors.grey),
-    );
+        onTap: onTap,
+        child: Icon(icon,
+            size: 16, color: isClose ? Colors.redAccent : Colors.grey));
   }
 
   Widget _buildMenuItem(int index, String title, IconData icon, Color color) {
@@ -438,16 +435,14 @@ class _MainLayoutState extends State<MainLayout>
 
   Widget _buildDivider() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Divider(color: Colors.white.withOpacity(0.05), height: 1),
-    );
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Divider(color: Colors.white.withOpacity(0.05), height: 1));
   }
 }
 
-// --- ZIRHLI & GÜVENLİ DASHBOARD ---
+// --- DÜZELTİLMİŞ DASHBOARD ---
 class DashboardHome extends StatefulWidget {
   const DashboardHome({super.key});
-
   @override
   State<DashboardHome> createState() => _DashboardHomeState();
 }
@@ -472,8 +467,12 @@ class _DashboardHomeState extends State<DashboardHome> {
   void initState() {
     super.initState();
     _getSystemStats();
-    _dashboardTimer = Timer.periodic(
-        const Duration(seconds: 3), (timer) => _getSystemStats());
+    _dashboardTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      // Mini moddayken gereksiz PowerShell çalıştırmayı durdur!
+      if (MediaQuery.of(context).size.width > 300) {
+        _getSystemStats();
+      }
+    });
   }
 
   @override
@@ -524,11 +523,8 @@ class _DashboardHomeState extends State<DashboardHome> {
               double.tryParse(_getValue(ramRaw, "TotalVisibleMemorySize")) ?? 1;
           double freeRamKB =
               double.tryParse(_getValue(ramRaw, "FreePhysicalMemory")) ?? 0;
-          if (totalRamKB <= 0) totalRamKB = 1;
-
           double usedRamGB = (totalRamKB - freeRamKB) / (1024 * 1024);
           double totalRamGB = totalRamKB / (1024 * 1024);
-
           ramText =
               "${usedRamGB.toStringAsFixed(1)} / ${totalRamGB.toStringAsFixed(1)} GB";
           ramProgress = (usedRamGB / totalRamGB).clamp(0.0, 1.0);
@@ -536,19 +532,14 @@ class _DashboardHomeState extends State<DashboardHome> {
           double totalDiskB = double.tryParse(_getValue(diskRaw, "Size")) ?? 1;
           double freeDiskB =
               double.tryParse(_getValue(diskRaw, "FreeSpace")) ?? 0;
-          if (totalDiskB <= 0) totalDiskB = 1;
-
           double totalDiskGB = totalDiskB / (1024 * 1024 * 1024);
-          double freeDiskGB = freeDiskB / (1024 * 1024 * 1024);
-          double usedDiskGB = totalDiskGB - freeDiskGB;
-
+          double usedDiskGB = totalDiskGB - (freeDiskB / (1024 * 1024 * 1024));
           diskText =
               "${usedDiskGB.toStringAsFixed(0)} / ${totalDiskGB.toStringAsFixed(0)} GB";
           diskProgress = (usedDiskGB / totalDiskGB).clamp(0.0, 1.0);
 
           netStatus = isOnline ? "ONLINE" : "OFFLINE";
           netColor = isOnline ? Colors.greenAccent : Colors.redAccent;
-
           isLoading = false;
         });
       }
@@ -572,138 +563,124 @@ class _DashboardHomeState extends State<DashboardHome> {
     final lines = raw.split('\n');
     for (var line in lines) {
       var parts = line.split(':');
-      if (line.trim().startsWith(key) && parts.length > 1) {
+      if (line.trim().startsWith(key) && parts.length > 1)
         return parts[1].trim();
-      }
     }
     return "0";
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 100 || constraints.maxHeight < 100)
+        return const Center(
+            child: CircularProgressIndicator(color: Colors.cyanAccent));
+      if (isLoading)
+        return const Center(
+            child:
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          CircularProgressIndicator(color: Colors.cyanAccent),
+          SizedBox(height: 20),
+          Text("Sistem Taranıyor...", style: TextStyle(color: Colors.grey))
+        ]));
+      return Padding(
+        padding: const EdgeInsets.all(25.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircularProgressIndicator(color: Colors.cyanAccent),
-            SizedBox(height: 20),
-            Text("Sistem Taranıyor...", style: TextStyle(color: Colors.grey))
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(25.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("SYSTEM DASHBOARD",
-                      style: GoogleFonts.audiowide(
-                          fontSize: 28, color: Colors.white)),
-                  Row(
-                    children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("SYSTEM DASHBOARD",
+                        style: GoogleFonts.audiowide(
+                            fontSize: 28, color: Colors.white)),
+                    Row(children: [
                       const Icon(Icons.circle,
                           color: Colors.greenAccent, size: 8),
                       const SizedBox(width: 5),
                       Text("Monitoring Active • $osName",
                           style:
-                              TextStyle(color: Colors.grey[500], fontSize: 12)),
-                    ],
-                  ),
-                ],
-              ),
-              Icon(Icons.monitor_heart,
-                  color: Colors.cyanAccent.withOpacity(0.5), size: 40),
-            ],
-          ),
-          const SizedBox(height: 30),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 1.8,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              children: [
-                _buildStatCard("CPU LOAD", cpuText, "İşlemci Yükü",
-                    Colors.blueAccent, FontAwesomeIcons.microchip,
-                    progress: cpuProgress),
-                _buildStatCard("MEMORY (RAM)", ramText, "Kullanılan / Toplam",
-                    Colors.purpleAccent, FontAwesomeIcons.memory,
-                    progress: ramProgress),
-                _buildStatCard("DISK (C:)", diskText, "Yerel Disk Doluluk",
-                    Colors.orangeAccent, FontAwesomeIcons.hardDrive,
-                    progress: diskProgress),
-                _buildInfoCard("HARDWARE & NET", gpuName, netStatus, netColor,
-                    FontAwesomeIcons.gamepad),
+                              TextStyle(color: Colors.grey[500], fontSize: 12))
+                    ]),
+                  ],
+                ),
+                Icon(Icons.monitor_heart,
+                    color: Colors.cyanAccent.withOpacity(0.5), size: 40),
               ],
             ),
-          )
-        ],
-      ),
-    );
+            const SizedBox(height: 30),
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                childAspectRatio: 1.8,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                children: [
+                  _buildStatCard("CPU LOAD", cpuText, "İşlemci Yükü",
+                      Colors.blueAccent, FontAwesomeIcons.microchip,
+                      progress: cpuProgress),
+                  _buildStatCard("MEMORY (RAM)", ramText, "Kullanılan / Toplam",
+                      Colors.purpleAccent, FontAwesomeIcons.memory,
+                      progress: ramProgress),
+                  _buildStatCard("DISK (C:)", diskText, "Yerel Disk Doluluk",
+                      Colors.orangeAccent, FontAwesomeIcons.hardDrive,
+                      progress: diskProgress),
+                  _buildInfoCard("HARDWARE & NET", gpuName, netStatus, netColor,
+                      FontAwesomeIcons.gamepad),
+                ],
+              ),
+            )
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildStatCard(
       String title, String value, String sub, Color color, IconData icon,
       {double progress = 0.0}) {
     if (progress.isNaN || progress.isInfinite) progress = 0.0;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: color.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 5))
-        ],
-      ),
+          color: const Color(0xFF161616),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: color.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5))
+          ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: GoogleFonts.shareTechMono(
-                      color: Colors.grey, fontSize: 14)),
-              Icon(icon, color: color.withOpacity(0.6), size: 20),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
-                  style: GoogleFonts.jetBrainsMono(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              const SizedBox(height: 5),
-              Text(sub,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 11)),
-            ],
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title,
+                style: GoogleFonts.shareTechMono(
+                    color: Colors.grey, fontSize: 14)),
+            Icon(icon, color: color.withOpacity(0.6), size: 20)
+          ]),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value,
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+            const SizedBox(height: 5),
+            Text(sub, style: TextStyle(color: Colors.grey[600], fontSize: 11))
+          ]),
           ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: color.withOpacity(0.1),
-              color: color,
-              minHeight: 6,
-            ),
-          )
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: color.withOpacity(0.1),
+                  color: color,
+                  minHeight: 6))
         ],
       ),
     );
@@ -714,57 +691,46 @@ class _DashboardHomeState extends State<DashboardHome> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.cyanAccent.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 5))
-        ],
-      ),
+          color: const Color(0xFF161616),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.cyanAccent.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5))
+          ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: GoogleFonts.shareTechMono(
-                      color: Colors.grey, fontSize: 14)),
-              Icon(icon, color: Colors.cyanAccent.withOpacity(0.6), size: 20),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("GPU MODEL:",
-                  style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-              Text(gpu,
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 10),
-              Text("NETWORK STATUS:",
-                  style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-              Row(
-                children: [
-                  Icon(Icons.wifi, color: netCol, size: 16),
-                  const SizedBox(width: 5),
-                  Text(net,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: netCol)),
-                ],
-              ),
-            ],
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title,
+                style: GoogleFonts.shareTechMono(
+                    color: Colors.grey, fontSize: 14)),
+            Icon(icon, color: Colors.cyanAccent.withOpacity(0.6), size: 20)
+          ]),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("GPU MODEL:",
+                style: TextStyle(color: Colors.grey[600], fontSize: 10)),
+            Text(gpu,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 10),
+            Text("NETWORK STATUS:",
+                style: TextStyle(color: Colors.grey[600], fontSize: 10)),
+            Row(children: [
+              Icon(Icons.wifi, color: netCol, size: 16),
+              const SizedBox(width: 5),
+              Text(net,
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold, color: netCol))
+            ])
+          ]),
           Container(
               height: 2, width: 50, color: Colors.cyanAccent.withOpacity(0.5))
         ],

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:http/http.dart' as http; // IP için http lazım
+import 'package:flutter/services.dart' show rootBundle; // ASSET ERİŞİMİ İÇİN
+import 'package:http/http.dart' as http;
 
 class NetworkPage extends StatefulWidget {
   const NetworkPage({super.key});
@@ -13,13 +13,11 @@ class NetworkPage extends StatefulWidget {
 }
 
 class _NetworkPageState extends State<NetworkPage> {
-  // --- IP ve Ping Değişkenleri ---
   String localIp = "Bekleniyor...";
   String publicIp = "Bekleniyor...";
   String pingStatus = "Başlatılmadı";
   bool isScanningIp = false;
 
-  // --- Speedtest Değişkenleri ---
   String downloadSpeed = "0.0";
   String uploadSpeed = "0.0";
   String speedPing = "--";
@@ -34,7 +32,7 @@ class _NetworkPageState extends State<NetworkPage> {
   @override
   void initState() {
     super.initState();
-    _getNetworkInfo(); // Sayfa açılınca IP'leri çek
+    _getNetworkInfo();
   }
 
   @override
@@ -43,13 +41,10 @@ class _NetworkPageState extends State<NetworkPage> {
     super.dispose();
   }
 
-  // 1. ESKİ IP BULMA FONKSİYONUMUZ (Geri Döndü!)
   Future<void> _getNetworkInfo() async {
     if (!mounted) return;
     setState(() => isScanningIp = true);
-
     try {
-      // Yerel IP
       String foundIp = "Bulunamadı";
       var interfaces = await NetworkInterface.list();
       for (var interface in interfaces) {
@@ -61,11 +56,7 @@ class _NetworkPageState extends State<NetworkPage> {
         }
         if (foundIp != "Bulunamadı") break;
       }
-
-      // Dış IP
       var response = await http.get(Uri.parse('https://api.ipify.org'));
-
-      // Basit Google Pingi
       String pingCmd = Platform.isWindows ? '-n' : '-c';
       var pingResult = await Process.run('ping', [pingCmd, '1', '8.8.8.8']);
 
@@ -79,57 +70,69 @@ class _NetworkPageState extends State<NetworkPage> {
     } catch (e) {
       if (mounted) setState(() => localIp = "Hata");
     }
-
     if (mounted) setState(() => isScanningIp = false);
   }
 
-  // 2. NATIVE SPEEDTEST (Düzeltildi)
+  // --- KRİTİK FONKSİYON: Asset'teki Exe'yi Dışarı Çıkar ---
+  Future<String> _extractSpeedtestExe() async {
+    try {
+      // Geçici klasör yolu (Windows Temp)
+      final tempDir = Directory.systemTemp;
+      final exeFile = File('${tempDir.path}/speedtest_internal.exe');
+
+      // Eğer dosya zaten varsa tekrar çıkarma (Performans için)
+      if (await exeFile.exists()) {
+        return exeFile.path;
+      }
+
+      // Dosyayı asset'ten oku
+      final byteData = await rootBundle.load('assets/speedtest.exe');
+      final buffer = byteData.buffer;
+
+      // Geçici klasöre yaz
+      await exeFile.writeAsBytes(
+        buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+      );
+
+      return exeFile.path;
+    } catch (e) {
+      throw Exception("Exe dosyası oluşturulamadı: $e");
+    }
+  }
+
   Future<void> _runNativeSpeedTest() async {
     if (isTesting) return;
 
     setState(() {
       isTesting = true;
       downloadSpeed = "Başlıyor...";
-      uploadSpeed = "0.0";
+      serverName = "Motor Hazırlanıyor...";
       progressValue = 0;
-      serverName = "Sunucu Aranıyor...";
     });
 
     try {
-      // DÜZELTME: Exe'yi projenin ana dizininde ara
-      // (Debug modunda assets içinden exe çalışmaz)
-      String exePath = 'speedtest.exe';
+      // Adım 1: Exe'yi gizlice çıkar
+      String exePath = await _extractSpeedtestExe();
 
-      if (!File(exePath).existsSync()) {
-        // Belki assets klasöründedir diye oraya da bakalım
-        if (File('assets/speedtest.exe').existsSync()) {
-          exePath = 'assets/speedtest.exe';
-        } else {
-          setState(() {
-            downloadSpeed = "EXE YOK!";
-            serverName = "Lütfen speedtest.exe'yi proje klasörüne at.";
-          });
-          isTesting = false;
-          return;
-        }
-      }
+      setState(() => serverName = "Sunucu Aranıyor...");
 
-      // Komutu çalıştır
-      _process = await Process.start(exePath, [
-        '--format=json-pretty',
-        '--progress=yes',
-        '--accept-license',
-        '--accept-gdpr',
-      ], runInShell: true);
+      // Adım 2: Çalıştır
+      _process = await Process.start(
+          exePath,
+          [
+            '--format=json-pretty',
+            '--progress=yes',
+            '--accept-license',
+            '--accept-gdpr',
+          ],
+          runInShell: true);
 
-      // Çıktıları satır satır oku
       _process!.stdout.transform(utf8.decoder).listen((data) {
-        print("LOG: $data"); // Konsoldan takip et
         _parseSpeedtestOutput(data);
       });
 
       _process!.stderr.transform(utf8.decoder).listen((data) {
-        print("HATA: $data");
+        debugPrint("HATA LOG: $data");
       });
 
       await _process!.exitCode;
@@ -145,7 +148,7 @@ class _NetworkPageState extends State<NetworkPage> {
       if (mounted) {
         setState(() {
           downloadSpeed = "Hata";
-          serverName = e.toString();
+          serverName = "Hata: ${e.toString()}"; // Hatayı ekrana bas
           isTesting = false;
         });
       }
@@ -154,64 +157,45 @@ class _NetworkPageState extends State<NetworkPage> {
 
   void _parseSpeedtestOutput(String data) {
     try {
-      // İLERLEME (JSON değil, text olarak gelir)
-      // Örnek: "Download: 45.5 Mbps (12%)"
       if (data.contains('Download:') && data.contains('%')) {
         setState(() => serverName = "İndirme Testi...");
-        // Görsel animasyon
         if (progressValue < 0.5) progressValue += 0.05;
       }
       if (data.contains('Upload:') && data.contains('%')) {
         setState(() => serverName = "Yükleme Testi...");
         if (progressValue < 0.9) progressValue += 0.05;
       }
-
-      // JSON VERİSİ
       if (data.contains('{')) {
         final cleanData = data.trim();
+        final jsonMap = jsonDecode(cleanData);
 
-        // PING
         if (cleanData.contains('"ping":')) {
-          final jsonMap = jsonDecode(cleanData);
-          if (jsonMap['ping'] != null) {
-            setState(() {
-              speedPing = double.parse(
-                jsonMap['ping']['latency'].toString(),
-              ).toStringAsFixed(0);
-              jitter = double.parse(
-                jsonMap['ping']['jitter'].toString(),
-              ).toStringAsFixed(0);
-            });
-          }
+          setState(() {
+            speedPing = double.parse(jsonMap['ping']['latency'].toString())
+                .toStringAsFixed(0);
+            jitter = double.parse(jsonMap['ping']['jitter'].toString())
+                .toStringAsFixed(0);
+          });
         }
-
-        // DOWNLOAD SONUCU
         if (cleanData.contains('"download":') &&
             cleanData.contains('"bandwidth":')) {
-          final jsonMap = jsonDecode(cleanData);
-          final bandwidth = jsonMap['download']['bandwidth'];
-          final mbps = (bandwidth * 8 / 1000000).toStringAsFixed(1);
+          final mbps = (jsonMap['download']['bandwidth'] * 8 / 1000000)
+              .toStringAsFixed(1);
           setState(() {
             downloadSpeed = mbps;
             progressValue = 0.5;
           });
         }
-
-        // UPLOAD SONUCU
         if (cleanData.contains('"upload":') &&
             cleanData.contains('"bandwidth":')) {
-          final jsonMap = jsonDecode(cleanData);
-          final bandwidth = jsonMap['upload']['bandwidth'];
-          final mbps = (bandwidth * 8 / 1000000).toStringAsFixed(1);
+          final mbps =
+              (jsonMap['upload']['bandwidth'] * 8 / 1000000).toStringAsFixed(1);
           setState(() {
             uploadSpeed = mbps;
             progressValue = 1.0;
           });
         }
-
-        // SUNUCU & ISP
         if (cleanData.contains('"server":')) {
-          final jsonMap = jsonDecode(cleanData);
           setState(() {
             serverName =
                 "${jsonMap['server']['name']} (${jsonMap['server']['location']})";
@@ -220,7 +204,7 @@ class _NetworkPageState extends State<NetworkPage> {
         }
       }
     } catch (e) {
-      // JSON parse hatası önemsiz, parça veri gelmiştir
+      // JSON parçalama hatalarını yut, akış devam etsin
     }
   }
 
@@ -244,72 +228,36 @@ class _NetworkPageState extends State<NetworkPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 1. IP BİLGİ KARTLARI (Geri Geldi!) ---
               _buildInfoCard("Local IP", localIp, Icons.laptop, Colors.blue),
               const SizedBox(height: 10),
               _buildInfoCard(
-                "Public IP",
-                publicIp,
-                Icons.public,
-                Colors.purple,
-              ),
+                  "Public IP", publicIp, Icons.public, Colors.purple),
               const SizedBox(height: 10),
               _buildInfoCard(
-                "Google Ping",
-                pingStatus,
-                Icons.network_check,
-                Colors.green,
-              ),
-
+                  "Google Ping", pingStatus, Icons.network_check, Colors.green),
               const SizedBox(height: 30),
               const Divider(color: Colors.white10),
               const SizedBox(height: 20),
-
-              // --- 2. OOKLA SPEEDTEST BÖLÜMÜ ---
-              Text(
-                "Ookla Speedtest Native",
-                style: TextStyle(
-                  color: Colors.cyanAccent,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              const Text("Ookla Speedtest Native",
+                  style: TextStyle(
+                      color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
-
-              // Detaylar (Ping, Jitter, ISP)
               Row(
                 children: [
                   Expanded(
-                    child: _buildMiniCard(
-                      "Ping",
-                      "$speedPing ms",
-                      Icons.speed,
-                      Colors.orange,
-                    ),
-                  ),
+                      child: _buildMiniCard(
+                          "Ping", "$speedPing ms", Icons.speed, Colors.orange)),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildMiniCard(
-                      "Jitter",
-                      "$jitter ms",
-                      Icons.graphic_eq,
-                      Colors.pink,
-                    ),
-                  ),
+                      child: _buildMiniCard("Jitter", "$jitter ms",
+                          Icons.graphic_eq, Colors.pink)),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildMiniCard(
-                      "ISP",
-                      ispName,
-                      Icons.wifi,
-                      Colors.teal,
-                    ),
-                  ),
+                      child: _buildMiniCard(
+                          "ISP", ispName, Icons.wifi, Colors.teal)),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Hız Göstergesi
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(30),
@@ -317,92 +265,67 @@ class _NetworkPageState extends State<NetworkPage> {
                   color: const Color(0xFF1A1A1A),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isTesting ? Colors.cyanAccent : Colors.white10,
-                  ),
+                      color: isTesting ? Colors.cyanAccent : Colors.white10),
                   boxShadow: isTesting
                       ? [
                           BoxShadow(
-                            color: Colors.cyanAccent.withOpacity(0.2),
-                            blurRadius: 40,
-                          ),
+                              color: Colors.cyanAccent.withOpacity(0.2),
+                              blurRadius: 40)
                         ]
                       : [],
                 ),
                 child: Column(
                   children: [
-                    const Text(
-                      "DOWNLOAD",
-                      style: TextStyle(
-                        letterSpacing: 2,
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
-                    ),
+                    const Text("DOWNLOAD",
+                        style: TextStyle(
+                            letterSpacing: 2,
+                            color: Colors.grey,
+                            fontSize: 12)),
                     const SizedBox(height: 5),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Text(
-                          downloadSpeed,
-                          style: TextStyle(
-                            fontSize: 50,
-                            fontWeight: FontWeight.bold,
-                            color: isTesting ? Colors.cyanAccent : Colors.white,
-                          ),
-                        ),
-                        const Text(
-                          " Mbps",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.cyanAccent,
-                          ),
-                        ),
+                        Text(downloadSpeed,
+                            style: TextStyle(
+                                fontSize: 50,
+                                fontWeight: FontWeight.bold,
+                                color: isTesting
+                                    ? Colors.cyanAccent
+                                    : Colors.white)),
+                        const Text(" Mbps",
+                            style: TextStyle(
+                                fontSize: 16, color: Colors.cyanAccent)),
                       ],
                     ),
                     const SizedBox(height: 15),
                     const Divider(color: Colors.white10),
                     const SizedBox(height: 15),
-                    const Text(
-                      "UPLOAD",
-                      style: TextStyle(
-                        letterSpacing: 2,
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
-                    ),
+                    const Text("UPLOAD",
+                        style: TextStyle(
+                            letterSpacing: 2,
+                            color: Colors.grey,
+                            fontSize: 12)),
                     const SizedBox(height: 5),
-                    Text(
-                      "$uploadSpeed Mbps",
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white70,
-                      ),
-                    ),
+                    Text("$uploadSpeed Mbps",
+                        style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70)),
                   ],
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // İlerleme ve Sunucu Adı
-              Text(
-                serverName,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
+              Text(serverName,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 10),
               LinearProgressIndicator(
-                value: progressValue,
-                color: Colors.cyanAccent,
-                backgroundColor: Colors.white10,
-                minHeight: 4,
-              ),
-
+                  value: progressValue,
+                  color: Colors.cyanAccent,
+                  backgroundColor: Colors.white10,
+                  minHeight: 4),
               const SizedBox(height: 30),
-
-              // Başlat Butonu
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -413,19 +336,14 @@ class _NetworkPageState extends State<NetworkPage> {
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                            color: Colors.black,
-                            strokeWidth: 2,
-                          ),
-                        )
+                              color: Colors.black, strokeWidth: 2))
                       : const Icon(Icons.rocket_launch),
                   label: Text(
-                    isTesting ? "TEST YAPILIYOR..." : "HIZ TESTİNİ BAŞLAT",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                      isTesting ? "TEST YAPILIYOR..." : "HIZ TESTİNİ BAŞLAT",
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyanAccent,
-                    foregroundColor: Colors.black,
-                  ),
+                      backgroundColor: Colors.cyanAccent,
+                      foregroundColor: Colors.black),
                 ),
               ),
             ],
@@ -435,65 +353,43 @@ class _NetworkPageState extends State<NetworkPage> {
     );
   }
 
-  // IP Kart Tasarımı (Eski stil)
   Widget _buildInfoCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+      String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 15),
-          Text(title, style: const TextStyle(color: Colors.grey)),
-          const Spacer(),
-          Text(
-            value,
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white10)),
+      child: Row(children: [
+        Icon(icon, color: color, size: 22),
+        const SizedBox(width: 15),
+        Text(title, style: const TextStyle(color: Colors.grey)),
+        const Spacer(),
+        Text(value,
             style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
+                fontWeight: FontWeight.bold, color: Colors.white))
+      ]),
     );
   }
 
-  // Speedtest Mini Kart Tasarımı
   Widget _buildMiniCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+      String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 4),
-          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 10)),
-          const SizedBox(height: 2),
-          Text(
-            value,
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10)),
+      child: Column(children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        Text(title, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+        const SizedBox(height: 2),
+        Text(value,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+            overflow: TextOverflow.ellipsis)
+      ]),
     );
   }
 }

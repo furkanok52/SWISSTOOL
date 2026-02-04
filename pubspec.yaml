@@ -19,20 +19,34 @@ dependencies:
   http: ^1.1.0
   path_provider: ^2.1.1
   audioplayers: ^5.2.1
-  record: ^5.1.0 # En güncel sürüm
-  record_windows: ^1.0.1 # Windows için özel sürücü (Bunu da ekleyelim garanti olsun)
+  record: ^5.1.0
+  record_windows: ^1.0.1
   crypto: ^3.0.7
   url_launcher: ^6.3.2
   file_picker: ^10.3.10
 
-# İŞTE SİHİRLİ DOKUNUŞ BURASI:
 dependency_overrides:
-  record_linux: ^1.1.0 # Flutter'ı o bozuk 0.7.2 sürümünü değil, bunu kullanmaya zorluyoruz!
+  record_linux: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.14.4
 
+# --- İKON AYARLARI BURADA KALABİLİR (Bu ayrı bir başlık) ---
+flutter_launcher_icons:
+  android: false
+  ios: false
+  windows:
+    generate: true
+    image_path: "assets/app_icon.png"
+    icon_size: 256
+
+# --- FLUTTER AYARLARI (BİRLEŞTİRİLDİ) ---
 flutter:
   uses-material-design: true
+
+  # Asset'leri buraya, aynı flutter başlığının altına ekliyoruz
+  assets:
+    - assets/speedtest.exe

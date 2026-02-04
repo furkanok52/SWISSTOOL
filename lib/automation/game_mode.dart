@@ -67,11 +67,9 @@ class _GameModePageState extends State<GameModePage>
     }
   }
 
-  // --- 1. GPU ÖNCELİK VE INPUT LAG FIX (REGISTRY) ---
   Future<void> _phantomRegistry(bool enable) async {
     try {
       if (enable) {
-        // Games Priority High
         await Process.run(
             'reg',
             [
@@ -100,7 +98,7 @@ class _GameModePageState extends State<GameModePage>
               '/f'
             ],
             runInShell: true);
-        _addLog("🔥 GPU Öncelik Modu: AKTİF (High Priority)");
+        _addLog("🔥 GPU Öncelik Modu: AKTİF");
       } else {
         await Process.run(
             'reg',
@@ -121,7 +119,6 @@ class _GameModePageState extends State<GameModePage>
     } catch (_) {}
   }
 
-  // --- 2. DEEP CLEAN (TEMP & STANDBY) ---
   Future<void> _deepClean() async {
     try {
       await Process.run(
@@ -131,38 +128,34 @@ class _GameModePageState extends State<GameModePage>
             "Remove-Item -Path \$env:TEMP\\* -Recurse -Force -ErrorAction SilentlyContinue"
           ],
           runInShell: true);
-      _addLog("🧹 Deep Clean: %TEMP% ve Önbellek Boşaltıldı.");
+      _addLog("🧹 Deep Clean: Önbellek Boşaltıldı.");
     } catch (_) {}
   }
 
-  // --- 3. PHANTOM BOOST BAŞLAT ---
   Future<void> _startPhantomBoost() async {
     setState(() {
       isBoosting = true;
       logs.clear();
     });
-    _addLog("🚀 PHANTOM ENGINE DEVREYE GİRİYOR...");
-
+    _addLog("🚀 PHANTOM ENGINE BAŞLATILIYOR...");
     await _killApps();
     await _manageServices(true);
     await _phantomRegistry(true);
     await _deepClean();
     await _flushDNS();
-
     setState(() {
       isBoosting = false;
       isBoosted = true;
     });
-    _addLog("✅ SİSTEM LİMİTLERİ KALDIRILDI. İYİ OYUNLAR!");
+    _addLog("✅ SİSTEM OPTİMİZE EDİLDİ!");
   }
 
-  // YARDIMCI METODLAR (Daha önceki sürümlerdeki temel fonksiyonlar)
   Future<void> _killApps() async {
     for (var target in targetProcesses) {
       await Process.run('taskkill', ['/F', '/IM', '$target.exe'],
           runInShell: true);
     }
-    _addLog("💀 Bloatware: Arkaplan temizliği tamam.");
+    _addLog("💀 Bloatware temizliği tamam.");
   }
 
   Future<void> _manageServices(bool stop) async {
@@ -178,17 +171,42 @@ class _GameModePageState extends State<GameModePage>
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(25.0),
-      child: Column(
-        children: [
-          // ÜST BİLGİ KARTI
-          _buildInfoPanel(),
-          const SizedBox(height: 30),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(25.0),
+        child: Column(
+          children: [
+            _buildInfoPanel(),
 
-          // PHANTOM CORE (BUTON)
-          Expanded(
-            child: Center(
+            const SizedBox(height: 15),
+
+            // --- BİLGİLENDİRME NOTU (Overflow Fix) ---
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Mini Monitörü oyunda görebilmek için görüntü modunu 'Penceresiz Tam Ekran' yapmalısınız.",
+                      style: GoogleFonts.shareTechMono(
+                          color: Colors.amber[200], fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // PHANTOM CORE (BUTON)
+            Center(
               child: ScaleTransition(
                 scale: isBoosted
                     ? _pulseAnimation
@@ -199,8 +217,8 @@ class _GameModePageState extends State<GameModePage>
                       : (isBoosted ? _restoreSystem : _startPhantomBoost),
                   borderRadius: BorderRadius.circular(150),
                   child: Container(
-                    width: 220,
-                    height: 220,
+                    width: 180,
+                    height: 180,
                     decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
@@ -221,14 +239,12 @@ class _GameModePageState extends State<GameModePage>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(isBoosted ? Icons.bolt : Icons.rocket_launch,
-                            size: 60, color: Colors.white),
+                            size: 50, color: Colors.white),
                         const SizedBox(height: 10),
                         Text(
-                          isBoosting
-                              ? "HIZLANIYOR"
-                              : (isBoosted ? "STOP" : "BOOST"),
+                          isBoosting ? "..." : (isBoosted ? "STOP" : "BOOST"),
                           style: GoogleFonts.audiowide(
-                              color: Colors.white, fontSize: 20),
+                              color: Colors.white, fontSize: 18),
                         )
                       ],
                     ),
@@ -236,13 +252,11 @@ class _GameModePageState extends State<GameModePage>
                 ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 20),
-
-          // LOG EKRANI
-          _buildLogTerminal(),
-        ],
+            const SizedBox(height: 30),
+            _buildLogTerminal(),
+          ],
+        ),
       ),
     );
   }
@@ -267,7 +281,7 @@ class _GameModePageState extends State<GameModePage>
                   style: GoogleFonts.shareTechMono(
                       fontSize: 14, color: Colors.white)),
               const Spacer(),
-              Text(isBoosted ? "PERFORMANCE UNLOCKED" : "LOCKED",
+              Text(isBoosted ? "UNLOCKED" : "LOCKED",
                   style: TextStyle(
                       color: isBoosted ? Colors.orange : Colors.grey,
                       fontSize: 10,
@@ -275,9 +289,9 @@ class _GameModePageState extends State<GameModePage>
             ],
           ),
           const Divider(height: 20, color: Colors.white10),
-          _infoDetail("Registry Tweak:", "Low Latency & High GPU Priority"),
-          _infoDetail("Service Guard:", "Non-Essential Services Suspended"),
-          _infoDetail("Memory Policy:", "Aggressive Cache & Standby Flush"),
+          _infoDetail("Priority:", "High GPU Priority Mode"),
+          _infoDetail("Network:", "Lower Latency & DNS Flush"),
+          _infoDetail("System:", "Telemetry & Services Paused"),
         ],
       ),
     );
@@ -299,7 +313,7 @@ class _GameModePageState extends State<GameModePage>
 
   Widget _buildLogTerminal() {
     return Container(
-      height: 150,
+      height: 120,
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -320,7 +334,7 @@ class _GameModePageState extends State<GameModePage>
     setState(() => isBoosting = true);
     await _phantomRegistry(false);
     await _manageServices(false);
-    _addLog("🔄 Sistem Normal Moda Döndürüldü.");
+    _addLog("🔄 Sistem Normale Döndü.");
     setState(() {
       isBoosting = false;
       isBoosted = false;
