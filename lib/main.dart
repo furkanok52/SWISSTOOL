@@ -8,7 +8,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 // --- SAYFA IMPORTLARI ---
 import 'network_page.dart';
 import 'doctor/system_doctor_page.dart';
-import 'hardware/hardware_menu.dart';
+import 'hardware/battery_page.dart'; // YENİ: Pil Sayfası
+import 'process/startup_page.dart'; // YENİ: Başlangıç Yöneticisi (Dosyayı oluşturmayı unutma!)
 import 'devtools/dev_tools_page.dart';
 import 'security/security_page.dart';
 import 'process/process_page.dart';
@@ -17,7 +18,7 @@ import 'fileops/large_file_finder.dart';
 import 'fileops/bulk_renamer.dart';
 import 'automation/auto_shutdown.dart';
 import 'automation/game_mode.dart';
-import 'floating_monitor.dart'; // Bu dosyanın hazır olduğundan emin ol!
+import 'floating_monitor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +26,7 @@ void main() async {
 
   WindowOptions windowOptions = const WindowOptions(
     size: Size(1150, 750),
-    minimumSize: Size(220, 70), // Mini mod için minimum boyutu iyice düşürdük
+    minimumSize: Size(220, 70),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
@@ -117,21 +118,24 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout>
     with WindowListener, SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
-  bool isFloating = false; // Floating mod kontrolü
+  bool isFloating = false;
 
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
+  // --- SAYFA LİSTESİ GÜNCELLENDİ ---
   final List<Widget> _pages = [
-    const DashboardHome(),
-    const NetworkPage(),
-    const SystemDoctorPage(),
-    const ProcessPage(),
-    const LargeFileFinderPage(),
-    const BulkRenamerPage(),
-    const AutoShutdownPage(),
-    const GameModePage(),
+    const DashboardHome(), // 0
+    const NetworkPage(), // 1
+    const SystemDoctorPage(), // 2
+    const ProcessPage(), // 3
+    const StartupPage(), // 4 (YENİ)
+    const BatteryPage(), // 5 (YENİ)
+    const LargeFileFinderPage(), // 6
+    const BulkRenamerPage(), // 7
+    const AutoShutdownPage(), // 8
+    const GameModePage(), // 9
   ];
 
   @override
@@ -151,16 +155,13 @@ class _MainLayoutState extends State<MainLayout>
     _animController.forward();
   }
 
-  // --- MOD DEĞİŞTİRİCİ FONKSİYON ---
   void _toggleFloating() async {
     if (!isFloating) {
-      // MİNİ MODA GEÇİŞ
       await windowManager.setAlwaysOnTop(true);
       await windowManager.setHasShadow(false);
       await windowManager.setSize(const Size(220, 70));
       await windowManager.setResizable(false);
     } else {
-      // NORMAL MODA GEÇİŞ
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setSize(const Size(1150, 750));
       await windowManager.setResizable(true);
@@ -188,7 +189,6 @@ class _MainLayoutState extends State<MainLayout>
     if (size.width <= 10 || size.height <= 10)
       return const Scaffold(backgroundColor: Color(0xFF0F0F0F));
 
-    // Eğer mini moddaysak sadece takip kutusunu göster
     if (isFloating) {
       return FloatingMonitor(onExpand: _toggleFloating);
     }
@@ -222,6 +222,7 @@ class _MainLayoutState extends State<MainLayout>
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // --- SOL MENÜ (Sidebar) ---
                         Container(
                           width: 240,
                           decoration: BoxDecoration(
@@ -239,7 +240,7 @@ class _MainLayoutState extends State<MainLayout>
                               Text("SWISSTOOL",
                                   style: GoogleFonts.audiowide(
                                       fontSize: 20, color: Colors.white)),
-                              Text("ULTIMATE EDITION",
+                              const Text("ULTIMATE EDITION",
                                   style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.cyanAccent,
@@ -266,6 +267,8 @@ class _MainLayoutState extends State<MainLayout>
                                           "System Doctor",
                                           FontAwesomeIcons.heartPulse,
                                           Colors.redAccent),
+
+                                      // PROCESS GRUBU
                                       _buildMenuItem(
                                           3,
                                           "Process Killer",
@@ -273,37 +276,52 @@ class _MainLayoutState extends State<MainLayout>
                                           Colors.pinkAccent),
                                       _buildMenuItem(
                                           4,
+                                          "Startup Manager",
+                                          FontAwesomeIcons.rocket,
+                                          Colors.yellowAccent), // YENİ
+
+                                      // HARDWARE GRUBU
+                                      _buildMenuItem(
+                                          5,
+                                          "Battery Health",
+                                          FontAwesomeIcons.batteryFull,
+                                          Colors.greenAccent), // YENİ
+
+                                      _buildDivider(),
+
+                                      // TOOLS GRUBU
+                                      _buildMenuItem(
+                                          6,
                                           "Large File Finder",
                                           FontAwesomeIcons.magnifyingGlassChart,
                                           Colors.tealAccent),
                                       _buildMenuItem(
-                                          5,
+                                          7,
                                           "Bulk Renamer",
                                           FontAwesomeIcons.tags,
                                           Colors.indigoAccent),
+
+                                      // AUTOMATION GRUBU
                                       _buildDivider(),
                                       _buildMenuItem(
-                                          6,
+                                          8,
                                           "Auto Shutdown",
                                           FontAwesomeIcons.powerOff,
                                           Colors.redAccent),
                                       _buildMenuItem(
-                                          7,
+                                          9,
                                           "Game Booster",
                                           FontAwesomeIcons.gamepad,
-                                          Colors.greenAccent),
+                                          Colors.orangeAccent),
+
                                       _buildDivider(),
-                                      // MINI MODE BUTONU
+
+                                      // EKSTRA BUTONLAR
                                       _buildSpecialButton(
                                           "Mini Mode",
                                           Icons.tab_unselected,
                                           Colors.cyanAccent,
                                           _toggleFloating),
-                                      _buildSpecialButton(
-                                          "Hardware Info",
-                                          FontAwesomeIcons.microchip,
-                                          Colors.orangeAccent,
-                                          () => showHardwareMenu(context)),
                                       _buildSpecialButton(
                                           "Dev Tools",
                                           FontAwesomeIcons.code,
@@ -339,13 +357,15 @@ class _MainLayoutState extends State<MainLayout>
                               ),
                               const Padding(
                                 padding: EdgeInsets.all(20.0),
-                                child: Text("v2.5.0 Phantom",
+                                child: Text("v2.6.0 Pro",
                                     style: TextStyle(
                                         color: Colors.grey, fontSize: 10)),
                               ),
                             ],
                           ),
                         ),
+
+                        // --- SAĞ İÇERİK ---
                         Expanded(
                           child: Container(
                             color: const Color(0xFF0F0F0F),
@@ -383,10 +403,11 @@ class _MainLayoutState extends State<MainLayout>
             _windowIcon(Icons.remove, () => windowManager.minimize()),
             const SizedBox(width: 10),
             _windowIcon(Icons.crop_square, () async {
-              if (await windowManager.isMaximized())
+              if (await windowManager.isMaximized()) {
                 windowManager.unmaximize();
-              else
+              } else {
                 windowManager.maximize();
+              }
             }),
             const SizedBox(width: 10),
             _windowIcon(Icons.close, () => windowManager.close(),
@@ -400,9 +421,10 @@ class _MainLayoutState extends State<MainLayout>
   Widget _windowIcon(IconData icon, VoidCallback onTap,
       {bool isClose = false}) {
     return InkWell(
-        onTap: onTap,
-        child: Icon(icon,
-            size: 16, color: isClose ? Colors.redAccent : Colors.grey));
+      onTap: onTap,
+      child:
+          Icon(icon, size: 16, color: isClose ? Colors.redAccent : Colors.grey),
+    );
   }
 
   Widget _buildMenuItem(int index, String title, IconData icon, Color color) {
@@ -440,7 +462,7 @@ class _MainLayoutState extends State<MainLayout>
   }
 }
 
-// --- DÜZELTİLMİŞ DASHBOARD ---
+// --- DASHBOARD HOME AYNI KALABİLİR ---
 class DashboardHome extends StatefulWidget {
   const DashboardHome({super.key});
   @override
@@ -455,11 +477,9 @@ class _DashboardHomeState extends State<DashboardHome> {
   String osName = "Sistem Taranıyor...";
   String netStatus = "--";
   Color netColor = Colors.grey;
-
   double cpuProgress = 0.0;
   double ramProgress = 0.0;
   double diskProgress = 0.0;
-
   bool isLoading = true;
   Timer? _dashboardTimer;
 
@@ -468,8 +488,7 @@ class _DashboardHomeState extends State<DashboardHome> {
     super.initState();
     _getSystemStats();
     _dashboardTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      // Mini moddayken gereksiz PowerShell çalıştırmayı durdur!
-      if (MediaQuery.of(context).size.width > 300) {
+      if (mounted && MediaQuery.of(context).size.width > 300) {
         _getSystemStats();
       }
     });
@@ -497,7 +516,6 @@ class _DashboardHomeState extends State<DashboardHome> {
             r"Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name");
         if (gpuRaw.isNotEmpty) gpuName = gpuRaw.trim();
       }
-
       if (osName.contains("Taranıyor")) {
         String osRaw = await _runPS(
             r"Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption");
@@ -583,6 +601,7 @@ class _DashboardHomeState extends State<DashboardHome> {
           SizedBox(height: 20),
           Text("Sistem Taranıyor...", style: TextStyle(color: Colors.grey))
         ]));
+
       return Padding(
         padding: const EdgeInsets.all(25.0),
         child: Column(
@@ -591,22 +610,18 @@ class _DashboardHomeState extends State<DashboardHome> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("SYSTEM DASHBOARD",
-                        style: GoogleFonts.audiowide(
-                            fontSize: 28, color: Colors.white)),
-                    Row(children: [
-                      const Icon(Icons.circle,
-                          color: Colors.greenAccent, size: 8),
-                      const SizedBox(width: 5),
-                      Text("Monitoring Active • $osName",
-                          style:
-                              TextStyle(color: Colors.grey[500], fontSize: 12))
-                    ]),
-                  ],
-                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text("SYSTEM DASHBOARD",
+                      style: GoogleFonts.audiowide(
+                          fontSize: 28, color: Colors.white)),
+                  Row(children: [
+                    const Icon(Icons.circle,
+                        color: Colors.greenAccent, size: 8),
+                    const SizedBox(width: 5),
+                    Text("Monitoring Active • $osName",
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12))
+                  ]),
+                ]),
                 Icon(Icons.monitor_heart,
                     color: Colors.cyanAccent.withOpacity(0.5), size: 40),
               ],
@@ -656,33 +671,32 @@ class _DashboardHomeState extends State<DashboardHome> {
                 offset: const Offset(0, 5))
           ]),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(title,
-                style: GoogleFonts.shareTechMono(
-                    color: Colors.grey, fontSize: 14)),
-            Icon(icon, color: color.withOpacity(0.6), size: 20)
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(title,
+                  style: GoogleFonts.shareTechMono(
+                      color: Colors.grey, fontSize: 14)),
+              Icon(icon, color: color.withOpacity(0.6), size: 20)
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(value,
+                  style: GoogleFonts.jetBrainsMono(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+              const SizedBox(height: 5),
+              Text(sub, style: TextStyle(color: Colors.grey[600], fontSize: 11))
+            ]),
+            ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: color.withOpacity(0.1),
+                    color: color,
+                    minHeight: 6))
           ]),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value,
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-            const SizedBox(height: 5),
-            Text(sub, style: TextStyle(color: Colors.grey[600], fontSize: 11))
-          ]),
-          ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: color.withOpacity(0.1),
-                  color: color,
-                  minHeight: 6))
-        ],
-      ),
     );
   }
 
@@ -701,40 +715,41 @@ class _DashboardHomeState extends State<DashboardHome> {
                 offset: const Offset(0, 5))
           ]),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(title,
-                style: GoogleFonts.shareTechMono(
-                    color: Colors.grey, fontSize: 14)),
-            Icon(icon, color: Colors.cyanAccent.withOpacity(0.6), size: 20)
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(title,
+                  style: GoogleFonts.shareTechMono(
+                      color: Colors.grey, fontSize: 14)),
+              Icon(icon, color: Colors.cyanAccent.withOpacity(0.6), size: 20)
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("GPU MODEL:",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 10)),
+              Text(gpu,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 10),
+              Text("NETWORK STATUS:",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 10)),
+              Row(children: [
+                Icon(Icons.wifi, color: netCol, size: 16),
+                const SizedBox(width: 5),
+                Text(net,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: netCol))
+              ])
+            ]),
+            Container(
+                height: 2, width: 50, color: Colors.cyanAccent.withOpacity(0.5))
           ]),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("GPU MODEL:",
-                style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-            Text(gpu,
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 10),
-            Text("NETWORK STATUS:",
-                style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-            Row(children: [
-              Icon(Icons.wifi, color: netCol, size: 16),
-              const SizedBox(width: 5),
-              Text(net,
-                  style: TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold, color: netCol))
-            ])
-          ]),
-          Container(
-              height: 2, width: 50, color: Colors.cyanAccent.withOpacity(0.5))
-        ],
-      ),
     );
   }
 }

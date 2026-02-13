@@ -13,6 +13,49 @@ class NetworkPage extends StatefulWidget {
 }
 
 class _NetworkPageState extends State<NetworkPage> {
+  // Değişkenler:
+  String selectedDns = "Google DNS";
+  final Map<String, String> dnsList = {
+    "Google DNS": "8.8.8.8,8.8.4.4",
+    "Cloudflare (Hızlı)": "1.1.1.1,1.0.0.1",
+    "OpenDNS (Güvenli)": "208.67.222.222,208.67.220.220",
+    "Varsayılan (Otomatik)": "DHCP",
+  };
+
+// Fonksiyon:
+  Future<void> _changeDns() async {
+    String dns = dnsList[selectedDns]!;
+    String cmd = "";
+
+    if (dns == "DHCP") {
+      // Otomatiğe al
+      cmd =
+          'Set-DnsClientServerAddress -InterfaceIndex (Get-NetAdapter | Where-Object Status -eq Up).InterfaceIndex -ResetServerAddresses';
+    } else {
+      // Manuel DNS ayarla
+      cmd =
+          'Set-DnsClientServerAddress -InterfaceIndex (Get-NetAdapter | Where-Object Status -eq Up).InterfaceIndex -ServerAddresses $dns';
+    }
+
+    // Yönetici izni gerekebilir, try-catch ile sarıyoruz
+    try {
+      await Process.run(
+          'powershell',
+          [
+            '-Command',
+            "Start-Process powershell -ArgumentList '-Command $cmd' -Verb RunAs"
+          ],
+          runInShell: true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("$selectedDns başarıyla uygulandı!"),
+          backgroundColor: Colors.green));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("DNS değiştirilemedi. Yönetici izni gerekebilir."),
+          backgroundColor: Colors.red));
+    }
+  }
+
   String localIp = "Bekleniyor...";
   String publicIp = "Bekleniyor...";
   String pingStatus = "Başlatılmadı";
@@ -242,6 +285,48 @@ class _NetworkPageState extends State<NetworkPage> {
                   style: TextStyle(
                       color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
+              // UI Kodu (Hız testi butonunun altına ekle):
+              const SizedBox(height: 30),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 20),
+              const Text("DNS Değiştirici (Ping Düşürücü)",
+                  style: TextStyle(
+                      color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white10)),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedDns,
+                    dropdownColor: const Color(0xFF1E1E1E),
+                    style: const TextStyle(color: Colors.white),
+                    isExpanded: true,
+                    items: dnsList.keys.map((String key) {
+                      return DropdownMenuItem<String>(
+                          value: key, child: Text(key));
+                    }).toList(),
+                    onChanged: (newValue) =>
+                        setState(() => selectedDns = newValue!),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.dns),
+                  label: const Text("DNS UYGULA"),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purpleAccent,
+                      foregroundColor: Colors.white),
+                  onPressed: _changeDns,
+                ),
+              ),
               Row(
                 children: [
                   Expanded(
